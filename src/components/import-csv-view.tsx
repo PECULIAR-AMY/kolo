@@ -6,13 +6,10 @@ import Papa from "papaparse";
 import { 
   Upload, 
   Check, 
-  FileSpreadsheet, 
-  AlertTriangle, 
   ArrowRight, 
   Landmark, 
   FileText, 
-  ChevronLeft, 
-  HelpCircle 
+  ChevronLeft
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -23,16 +20,19 @@ export default function ImportCsvView() {
   const [selectedSource, setSelectedSource] = useState<Transaction["bank"]>("GTBANK");
   const [file, setFile] = useState<File | null>(null);
   const [parsedHeaders, setParsedHeaders] = useState<string[]>([]);
-  const [parsedData, setParsedData] = useState<Record<string, any>[]>([]);
+  const [parsedData, setParsedData] = useState<Record<string, string>[]>([]);
   
   // Mapping configuration states
   const [titleCol, setTitleCol] = useState("");
   const [subtitleCol, setSubtitleCol] = useState("");
   const [amountCol, setAmountCol] = useState("");
+  
+  // Mapping configuration states
   const [categoryCol, setCategoryCol] = useState("");
   const [bankCol, setBankCol] = useState("");
   const [dateCol, setDateCol] = useState("");
   const [typeCol, setTypeCol] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,14 +69,21 @@ export default function ImportCsvView() {
     }
 
     setFile(selectedFile);
-    Papa.parse(selectedFile, {
+    const headerCounts = new Map<string, number>();
+    Papa.parse<Record<string, string>>(selectedFile, {
       header: true,
       skipEmptyLines: true,
+      transformHeader: (header, index) => {
+        const cleaned = header.trim() || `Column_${index + 1}`;
+        const count = headerCounts.get(cleaned) || 0;
+        headerCounts.set(cleaned, count + 1);
+        return count > 0 ? `${cleaned}_${count}` : cleaned;
+      },
       complete: (results) => {
         if (results.data && results.data.length > 0) {
-          const headers = Object.keys(results.data[0] as any);
+          const headers = Object.keys(results.data[0]);
           setParsedHeaders(headers);
-          setParsedData(results.data as any[]);
+          setParsedData(results.data);
           
           // Auto-map headers
           autoMapHeaders(headers);
@@ -118,7 +125,7 @@ export default function ImportCsvView() {
   };
 
   // Import parsed data to context
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!titleCol || !amountCol) {
       alert("Please map at least Title/Vendor and Amount columns.");
       return;
@@ -130,11 +137,11 @@ export default function ImportCsvView() {
       // Determine direction flow
       let typeVal: "income" | "expense" = "expense";
       if (typeCol && row[typeCol]) {
-        const tStr = row[typeCol].toLowerCase();
+        const tStr = String(row[typeCol]).toLowerCase();
         if (tStr.includes("in") || tStr.includes("credit") || tStr.includes("plus") || tStr.includes("income")) {
           typeVal = "income";
         }
-      } else if (row[categoryCol]?.toLowerCase() === "income") {
+      } else if (String(row[categoryCol] || "").toLowerCase() === "income") {
         typeVal = "income";
       }
 
@@ -171,8 +178,15 @@ export default function ImportCsvView() {
       };
     });
 
-    importTransactions(mappedTransactions);
-    setActiveTab("transactions");
+    try {
+      setIsImporting(true);
+      await importTransactions(mappedTransactions);
+      setActiveTab("transactions");
+    } catch {
+      // Toast notification is handled by importTransactions
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   return (
@@ -433,14 +447,14 @@ export default function ImportCsvView() {
 
                   <button
                     onClick={handleImport}
-                    disabled={!titleCol || !amountCol}
+                    disabled={!titleCol || !amountCol || isImporting}
                     className={`w-full flex items-center justify-center gap-1.5 rounded-xl py-3.5 text-center text-xs font-black transition-all mt-4 cursor-pointer active:scale-95 ${
-                      titleCol && amountCol
+                      titleCol && amountCol && !isImporting
                         ? "bg-slate-950 text-white hover:bg-slate-800 shadow-sm"
                         : "bg-slate-100 text-slate-400 cursor-not-allowed"
                     }`}
                   >
-                    <span>Import {parsedData.length} records</span>
+                    <span>{isImporting ? "Importing..." : `Import ${parsedData.length} records`}</span>
                     <ArrowRight size={14} className="stroke-[3]" />
                   </button>
                 </div>

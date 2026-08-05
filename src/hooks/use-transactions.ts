@@ -66,8 +66,8 @@ export function useCreateTransactionMutation() {
 
   return useMutation({
     mutationFn: (payload: CreateTransactionPayload) => createTransactionApi(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TRANSACTIONS_QUERY_KEY });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: TRANSACTIONS_QUERY_KEY });
     },
   });
 }

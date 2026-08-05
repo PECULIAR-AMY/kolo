@@ -49,7 +49,7 @@ interface FinanceContextType {
   addTransaction: (t: Omit<Transaction, "id">) => void;
   updateTransaction: (id: string, t: Omit<Transaction, "id">) => void;
   deleteTransaction: (id: string) => void;
-  importTransactions: (ts: Omit<Transaction, "id">[]) => void;
+  importTransactions: (ts: Omit<Transaction, "id">[]) => Promise<void>;
   resetToDefault: () => void;
   categories: string[];
   
@@ -154,22 +154,35 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const importTransactions = React.useCallback(
-    (newTs: Omit<Transaction, "id">[]) => {
-      if (isAuthenticated) {
-        newTs.forEach((t) => {
-          const catObj = categoryData?.find(
-            (c) => c.name.toLowerCase() === t.category.toLowerCase()
-          );
-          createTxMutation.mutate({
-            amount: t.amount,
-            transaction_type: t.type,
-            transaction_date: t.date,
-            description: t.subtitle ? `${t.title} · ${t.subtitle}` : t.title,
-            category_id: catObj ? catObj.id : null,
-          });
-        });
+    async (newTs: Omit<Transaction, "id">[]) => {
+      if (!isAuthenticated) {
+        toast.error("Please sign in before importing transactions.");
+        return;
       }
-      toast.success(`Successfully imported ${newTs.length} transactions`);
+
+      try {
+        await Promise.all(
+          newTs.map((t) => {
+            const catObj = categoryData?.find(
+              (c) => c.name.toLowerCase() === t.category.toLowerCase()
+            );
+
+            return createTxMutation.mutateAsync({
+              amount: t.amount,
+              transaction_type: t.type,
+              transaction_date: t.date,
+              description: t.subtitle ? `${t.title} · ${t.subtitle}` : t.title,
+              category_id: catObj ? catObj.id : undefined,
+            });
+          })
+        );
+
+        toast.success(`Successfully imported ${newTs.length} transactions`);
+      } catch (err) {
+        console.error("Failed to import transactions:", err);
+        toast.error("Import failed. Please check the CSV and try again.");
+        throw new Error("Failed to import transactions.");
+      }
     },
     [toast, isAuthenticated, categoryData, createTxMutation]
   );
@@ -273,7 +286,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           addTransaction: () => {},
           updateTransaction: () => {},
           deleteTransaction: () => {},
-          importTransactions: () => {},
+          importTransactions: async () => {},
           resetToDefault: () => {},
           categories: DEFAULT_CATEGORIES,
           totalIncome: 1036800,

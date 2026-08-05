@@ -49,7 +49,7 @@ export default function SpendingTrend({ data }: { data: ChartData[] }) {
 
   return (
     <div className="h-64 w-full md:h-72 select-none" style={{ touchAction: "pan-y" }}>
-      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={{ width: 300, height: 200 }}>
         <AreaChart
           data={data}
           margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
